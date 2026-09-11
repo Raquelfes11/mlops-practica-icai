@@ -6,11 +6,14 @@ from sklearn.metrics import accuracy_score
 import joblib
 import mlflow
 import mlflow.sklearn
+import dagshub
 
 # Cargar el conjunto de datos
 iris = datasets.load_iris()
 X = iris.data
 y = iris.target
+
+dagshub.init(repo_owner='Raquelfes11', repo_name='mlops-practica-icai', mlflow=True)
 
 # Iniciar un experimento de MLflow
 with mlflow.start_run():
@@ -20,7 +23,7 @@ with mlflow.start_run():
     )
 
     # Inicializar y entrenar el modelo
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model = RandomForestClassifier(n_estimators=200, random_state=42)
     model.fit(X_train, y_train)
 
     # Realizar predicciones y calcular la precisión
@@ -34,7 +37,7 @@ with mlflow.start_run():
     mlflow.sklearn.log_model(model, "random-forest-model")
 
     # Registrar parámetros y métricas
-    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("n_estimators", 200)
     mlflow.log_metric("accuracy", accuracy)
 
     print(f"Modelo entrenado y precisión: {accuracy:.4f}")

@@ -1,5 +1,4 @@
 import pandas as pd
-from sklearn import datasets
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
@@ -9,9 +8,14 @@ import mlflow.sklearn
 import dagshub
 
 # Cargar el conjunto de datos
-iris = datasets.load_iris()
-X = iris.data
-y = iris.target
+try:
+    iris = pd.read_csv('data/iris_dataset.csv')
+except:
+    print("Error: El archivo 'data/iris_dataset.csv' no fue encontrado")
+
+# Dividir el Dataframe en características (X) y etiquetas (y)
+X = iris.drop('target', axis=1)
+y = iris['target']
 
 dagshub.init(repo_owner='Raquelfes11', repo_name='mlops-practica-icai', mlflow=True)
 

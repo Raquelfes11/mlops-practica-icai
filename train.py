@@ -1,67 +1,89 @@
+import os
+import json
+import argparse
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
 import joblib
 import mlflow
 import mlflow.sklearn
+import matplotlib.pyplot as plt
+import seaborn as sns
 import dagshub
 
-# Cargar el conjunto de datos
-try:
-    iris = pd.read_csv('data/iris_dataset.csv')
-except:
-    print("Error: El archivo 'data/iris_dataset.csv' no fue encontrado")
 
-# Dividir el Dataframe en características (X) y etiquetas (y)
-X = iris.drop('target', axis=1)
-y = iris['target']
+def train_model(n_estimators):
+    # Dagshub config
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+    mlflow.set_tracking_uri(tracking_uri)
 
-tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
-mlflow.set_tracking_uri(tracking_uri)
+    # Cargar el conjunto de datos desde el archivo CSV
+    try:
+        iris = pd.read_csv('data/iris_dataset.csv')
+    except FileNotFoundError:
+        print("Error: El archivo 'data/iris_dataset.csv' no fue encontrado.")
+        return
 
-# Iniciar un experimento de MLflow
-with mlflow.start_run():
-    # Dividir los datos en conjuntos de entrenamiento y prueba
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=42
-    )
+    # Dividir el DataFrame en características (X) y etiquetas (y)
+    X = iris.drop('target', axis=1)
+    y = iris['target']
 
-    # Inicializar y entrenar el modelo
-    model = RandomForestClassifier(n_estimators=200, random_state=42)
-    model.fit(X_train, y_train)
+    # Iniciar un experimento de MLflow
+    with mlflow.start_run():
+        # Dividir los datos en conjuntos de entrenamiento y prueba
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.3, random_state=42
+        )
 
-    # Realizar predicciones y calcular la precisión
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+        # Inicializar y entrenar el modelo
+        model = RandomForestClassifier(n_estimators=n_estimators, random_state=42)
+        model.fit(X_train, y_train)
 
-    # Guardar el modelo entrenado en un archivo .pkl
-    joblib.dump(model, 'model.pkl')
+        # Realizar predicciones y calcular la precisión
+        y_pred = model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
 
-    # Registrar el modelo con MLflow
-    mlflow.sklearn.log_model(
-        model,
-        name="random-forest-model",
-        skops_trusted_types=["sklearn.tree._tree.Tree"],
-    )
+        # Guardar el modelo entrenado en un archivo .pkl
+        joblib.dump(model, 'model.pkl')
 
-    # Registrar parámetros y métricas
-    mlflow.log_param("n_estimators", 200)
-    mlflow.log_metric("accuracy", accuracy)
+        # Registrar el modelo con MLflow
+        mlflow.sklearn.log_model(
+            model,
+            name="random-forest-model",
+            skops_trusted_types=["sklearn.tree._tree.Tree"],
+        )
 
-    print(f"Modelo entrenado y precisión: {accuracy:.4f}")
-    print("Experimento registrado con MLflow.")
+        # Registrar parámetros y métricas
+        mlflow.log_param("n_estimators", n_estimators)
+        mlflow.log_metric("accuracy", accuracy)
 
-    # Generar la matriz de confusión
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.title('Matriz de Confusión')
-    plt.xlabel('Predicciones')
-    plt.ylabel('Valores Reales')
-    plt.savefig('confusion_matrix.png')
-    print("Matriz de confusión guardada como 'confusion_matrix.png'")
-    mlflow.log_artifact("confusion_matrix.png")
+        print(f"Modelo entrenado con n_estimators={n_estimators} y precisión: {accuracy:.4f}")
+        print("Experimento registrado con MLflow.")
+
+        # --- Sección de Reporte para CML ---
+        cm = confusion_matrix(y_test, y_pred)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.title('Matriz de Confusión')
+        plt.xlabel('Predicciones')
+        plt.ylabel('Valores Reales')
+        plt.savefig('confusion_matrix.png')
+        print("Matriz de confusión guardada como 'confusion_matrix.png'")
+        # --- Fin de la sección de Reporte ---
+
+        # Guardar el artefacto en MLflow remoto
+        mlflow.log_artifact("confusion_matrix.png")
+
+        # Guardar métricas para DVC
+        metrics = {"accuracy": accuracy}
+        with open("mlflow_metrics.json", "w") as f:
+            json.dump(metrics, f)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n_estimators", type=int, default=100,
+                        help="Number of estimators for RandomForestClassifier")
+    args = parser.parse_args()
+    train_model(args.n_estimators)
